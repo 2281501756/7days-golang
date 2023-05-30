@@ -2,19 +2,16 @@ package gee
 
 import "net/http"
 
-type handleFunc func(w http.ResponseWriter, r *http.Request)
-
 type Engine struct {
-	router map[string]handleFunc
+	router *Router
 }
 
 func New() *Engine {
-	return &Engine{router: map[string]handleFunc{}}
+	return &Engine{router: &Router{handles: map[string]handleFunc{}}}
 }
 
 func (e *Engine) addRouter(method string, pattern string, handle handleFunc) {
-	key := method + "-" + pattern
-	e.router[key] = handle
+	e.router.addRouter(method, pattern, handle)
 }
 func (e *Engine) GET(pattern string, handle handleFunc) {
 	e.addRouter("GET", pattern, handle)
@@ -30,12 +27,8 @@ func (e *Engine) DELETE(pattern string, handle handleFunc) {
 }
 
 func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	key := r.Method + "-" + r.URL.Path
-	if handle, ok := e.router[key]; ok {
-		handle(w, r)
-	} else {
-		w.Write([]byte("404 not found"))
-	}
+	c := newContext(w, r)
+	e.router.handle(c)
 }
 
 func (e *Engine) Run(port string) error {
