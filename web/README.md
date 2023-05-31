@@ -298,6 +298,145 @@ func main() {
 
 ```
 
+## day3
+实现一下前缀树路由，要支持在路由路径中使用 :name 和 *filepath这种格式的路由
+
+这里就得使用树的数据结构来储存每一段path才能匹配
+
+![树的图片](../img/1.png)
+
+这里设计一下 trieNode的结构
+```go
+type node struct {
+	pattern  string  // 匹配路径只有在匹配成功的叶子节点才值否则都为空字符串
+	part     string  // 部分值代表这个节点值
+	children []*node // 孩子
+	isWild   bool    // 是否精准匹配 : 和 * 开头的一定匹配成功其他都是false
+}
+```
+然后需要在router中新添加一个trieMap,用来存贮创建好的树，每一种请求方式都有一个树
+```go
+type Router struct {
+	handleMap map[string]handleFunc // 路由与handle的map
+	trieMap   map[string]*node      // 前缀树的map key是 GET POST这些value是路由的前缀树
+}
+```
+然后编写router种的addRouter方法，这里需要看树根节点是否有值没有得先创建
+```go
+func (r *Router) addRouter(method string, pattern string, handle handleFunc) {
+	key := method + "-" + pattern
+	parseArray := parsePattern(pattern)
+	if r.trieMap[method] == nil {
+		r.trieMap[method] = &node{}
+	}
+	r.trieMap[method].insert(pattern, parseArray, 0)
+	r.handleMap[key] = handle
+}
+```
+这里又得编写node的insert方法和search方法
+```go
+func (n *node) insert(pattern string, parts []string, height int) {
+	if len(parts) == height {
+		n.pattern = pattern
+		return
+	}
+	part := parts[height]
+	child := n.matchChild(part)
+	if child == nil {
+		child = &node{part: part, isWild: part[0] == ':' || part[0] == '*'}
+		n.children = append(n.children, child)
+	}
+	child.insert(pattern, parts, height+1)
+}
+
+func (n *node) search(pattern string, parts []string, height int) *node {
+	if len(parts) == height || (len(n.part) > 0 && n.part[0] == '*') {
+		if n.pattern == "" {
+			return nil
+		}
+		return n
+	}
+	part := parts[height]
+	children := n.matchChildren(part)
+	for _, c := range children {
+		res := c.search(pattern, parts, height+1)
+		if res != nil {
+			return res
+		}
+	}
+	return nil
+}
+```
+插入方法就是看子节点是否有匹配的有匹配的就在子节点种插入，没有就创建子节点然后递归记录层数
+
+查找方法与插入方法类似都是记录层数然后递归这里查找的时候如果层数相等的时候还需要看看n.pattern
+是否为空字符串，如果是空字符串则代表不是叶子节点不能匹配上
+
+最后再修改router种的handle方法，正确匹配到handle
+```go
+func (r *Router) getRouter(method, path string) (*node, map[string]string) {
+	parseArray := parsePattern(path)
+	if r.trieMap[method] == nil {
+		return nil, nil
+	}
+	n := r.trieMap[method].search(path, parseArray, 0)
+	if n == nil {
+		return nil, nil
+	}
+	params := map[string]string{}
+	parts := parsePattern(n.pattern)
+
+	for i, item := range parts {
+		if item[0] == ':' {
+			params[item[1:]] = parseArray[i]
+		}
+		if item[0] == '*' && len(parts) > 1 {
+			params[item[1:]] = strings.Join(parseArray[i:], "/")
+			break
+		}
+	}
+	return n, params
+
+}
+
+func (r *Router) handle(c *Context) {
+	n, params := r.getRouter(c.Method, c.Path)
+	if n != nil {
+		key := c.Method + "-" + n.pattern
+		c.Params = params
+		r.handleMap[key](c)
+	} else {
+		_, err := c.Writer.Write([]byte("404 not found"))
+		if err != nil {
+			panic("404 not found")
+		}
+	}
+}
+```
+这里写了一个getRouter方法返回匹配到的node节点以及paramsMap如果节点为空则代表没有匹配的路由返回404
+如果有则key变为 Method + '-' + n.pattern
+
+这里不能继续使用c.path,要使用我们根据c.path匹配到的注册路径
+
+这样就基本实现了前缀树路由的功能
+
+主函数编写测试
+```go
+	engin.GET("/user/:id/:name", func(c *gee.Context) {
+		c.JSON(200, gee.H{
+			"params": c.Params,
+		})
+	})
+	engin.GET("/static/*filename", func(c *gee.Context) {
+		c.JSON(200, gee.H{
+			"params": c.Params,
+		})
+	})
+```
+![](../img/img.png)
+![](../img/img_1.png)
+
+
 
 
 

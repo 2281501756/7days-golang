@@ -2,12 +2,14 @@ package gee
 
 import "net/http"
 
+type handleFunc func(c *Context)
+
 type Engine struct {
 	router *Router
 }
 
 func New() *Engine {
-	return &Engine{router: &Router{handles: map[string]handleFunc{}}}
+	return &Engine{router: newRouter()}
 }
 
 func (e *Engine) addRouter(method string, pattern string, handle handleFunc) {
