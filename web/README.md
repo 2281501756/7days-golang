@@ -524,6 +524,75 @@ user := r.Group("/user")
 	})
 ```
 
+# day5
+实现中间件
+
+中间件的思路是在routergroup中注册我们要使用的中间件，然后在接受到一共请求的时候遍历所有的routergroup找到预期前缀相同
+的将中间件添加到context中，然后在context中记录以下运行到哪一个handler了一直向后遍历这个也就是next方法
+```go
+type Context struct {
+	Writer http.ResponseWriter
+	Req    *http.Request
+
+	// 路径
+	Method string
+	Path   string
+	Params map[string]string
+	// 数据
+	StatusCode int
+
+	// 中间件
+	handlers []HandleFunc // 保存所有的中间件
+	index    int          // 中间件执行的下标
+}
+
+
+func (c *Context) Next() {
+    c.index++
+    for ; c.index < len(c.handlers); c.index++ {
+        c.handlers[c.index](c)
+    }
+}
+
+```
+这里在context中添加两个属性以及编写next方法,由于index属性在context上所有for循环不会调用执行过的handle
+
+
+```go
+func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	var middleware []HandleFunc
+	for _, group := range e.groups {
+		if strings.HasPrefix(r.URL.Path, group.prefix) {
+			middleware = append(middleware, group.middlewares...)
+		}
+	}
+	c := newContext(w, r)
+	c.handlers = middleware
+	e.router.handle(c)
+}
+```
+编写ServeHTTP方法实现匹配routergroup 
+```go
+func (r *Router) handle(c *Context) {
+	n, params := r.getRouter(c.Method, c.Path)
+	if n != nil {
+		key := c.Method + "-" + n.pattern
+		c.Params = params
+		c.handlers = append(c.handlers, r.handleMap[key])
+	} else {
+		c.handlers = append(c.handlers, func(c *Context) {
+			_, err := c.Writer.Write([]byte("404 not found"))
+			if err != nil {
+				panic("404 not found")
+			}
+		})
+
+	}
+	c.Next()
+}
+```
+修改router中的handle方法，将这里的直接执行换成添加到中间件之中，这个也是最后一个中间件
+
 
 
 

@@ -5,13 +5,13 @@ import (
 )
 
 type Router struct {
-	handleMap map[string]handleFunc // 路由与handle的map
+	handleMap map[string]HandleFunc // 路由与handle的map
 	trieMap   map[string]*node      // 前缀树的map key是 GET POST这些value是路由的前缀树
 }
 
 func newRouter() *Router {
 	return &Router{
-		handleMap: map[string]handleFunc{},
+		handleMap: map[string]HandleFunc{},
 		trieMap:   map[string]*node{},
 	}
 }
@@ -30,7 +30,7 @@ func parsePattern(pattern string) []string {
 	return res
 }
 
-func (r *Router) addRouter(method string, pattern string, handle handleFunc) {
+func (r *Router) addRouter(method string, pattern string, handle HandleFunc) {
 	key := method + "-" + pattern
 	parseArray := parsePattern(pattern)
 	if r.trieMap[method] == nil {
@@ -70,11 +70,15 @@ func (r *Router) handle(c *Context) {
 	if n != nil {
 		key := c.Method + "-" + n.pattern
 		c.Params = params
-		r.handleMap[key](c)
+		c.handlers = append(c.handlers, r.handleMap[key])
 	} else {
-		_, err := c.Writer.Write([]byte("404 not found"))
-		if err != nil {
-			panic("404 not found")
-		}
+		c.handlers = append(c.handlers, func(c *Context) {
+			_, err := c.Writer.Write([]byte("404 not found"))
+			if err != nil {
+				panic("404 not found")
+			}
+		})
+
 	}
+	c.Next()
 }

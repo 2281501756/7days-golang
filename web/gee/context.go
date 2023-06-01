@@ -14,8 +14,12 @@ type Context struct {
 	Method string
 	Path   string
 	Params map[string]string
-	//
+	// 数据
 	StatusCode int
+
+	// 中间件
+	handlers []HandleFunc // 保存所有的中间件
+	index    int          // 中间件执行的下标
 }
 
 func newContext(w http.ResponseWriter, r *http.Request) *Context {
@@ -24,6 +28,14 @@ func newContext(w http.ResponseWriter, r *http.Request) *Context {
 		Req:    r,
 		Method: r.Method,
 		Path:   r.URL.Path,
+		index:  -1,
+	}
+}
+
+func (c *Context) Next() {
+	c.index++
+	for ; c.index < len(c.handlers); c.index++ {
+		c.handlers[c.index](c)
 	}
 }
 

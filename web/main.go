@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/2281501756/7days-golang/web/gee"
 )
 
@@ -15,7 +16,14 @@ func main() {
 			"code": 200,
 		})
 	})
+	userMiddleware := func() gee.HandleFunc {
+		return func(c *gee.Context) {
+			fmt.Println("请求了user")
+			c.Next()
+		}
+	}
 	user := r.Group("/user")
+	user.Use(userMiddleware())
 	user.GET("/", func(c *gee.Context) {
 		c.HTML(200, "<h1 style='color: red'>用户分组</h1>")
 	})
