@@ -436,9 +436,93 @@ func (r *Router) handle(c *Context) {
 ![](../img/img.png)
 ![](../img/img_1.png)
 
+## day4
+分组控制 虽然现在实现了路由的基本匹配但是我们希望实现成gin那样可以通过r.group去新建一共router组，组中可以使用中间件鉴权这样
 
+```go
+r := gee.New()
+v1 := r.Group("/v1")
+v1.GET("/", func(c *gee.Context) {
+	c.HTML(http.StatusOK, "<h1>Hello Gee</h1>")
+})
+```
+要实现上面这种效果
 
+其实现在get post等注册方法都是在engine对象上，在路由中以及实现了根据完整路由注册handle的所有功能我们这里只需要对engine中的进行加工封装即可
 
+新设计一个RouterGroup对象 用来保存前缀中间件
+```go
+RouterGroup struct {
+	prefix      string
+	middlewares []HandlerFunc // support middleware
+	parent      *RouterGroup  // support nesting
+	engine      *Engine       // all groups share a Engine instance
+}
+```
+由于我们想让engine用于RouterGroup中的所有功能因此这里直接继承
+```go
+type Engine struct {
+	router *Router
+	groups []*RouterGroup // 保存所有的RouterGroup
+
+	*RouterGroup // 继承routerGroup让engine作为最上层的router
+}
+```
+然后封装RouterGroup对象，新建的时候拼接前缀存入prefix中在addrouter的时候直接传入prefix即可
+```go
+package gee
+
+type RouterGroup struct {
+	prefix      string
+	parent      *RouterGroup
+	middlewares []handleFunc
+	engine      *Engine
+}
+
+func (r *RouterGroup) Group(prefix string) *RouterGroup {
+	engine := r.engine
+	newGroup := &RouterGroup{
+		engine: engine,
+		parent: r,
+		prefix: r.prefix + prefix,
+	}
+	engine.groups = append(engine.groups, newGroup)
+	return newGroup
+}
+
+func (r *RouterGroup) addRouter(method string, comp string, handle handleFunc) {
+	pattern := r.prefix + comp
+	r.engine.router.addRouter(method, pattern, handle)
+}
+
+func (r *RouterGroup) GET(pattern string, handle handleFunc) {
+	r.addRouter("GET", pattern, handle)
+}
+func (r *RouterGroup) POST(pattern string, handle handleFunc) {
+	r.addRouter("POST", pattern, handle)
+}
+func (r *RouterGroup) PUT(pattern string, handle handleFunc) {
+	r.addRouter("PUT", pattern, handle)
+}
+func (r *RouterGroup) DELETE(pattern string, handle handleFunc) {
+	r.addRouter("DELETE", pattern, handle)
+}
+
+```
+这样就实现了路由分组，最后在浏览器中测试
+```go
+user := r.Group("/user")
+	user.GET("/", func(c *gee.Context) {
+		c.HTML(200, "<h1 style='color: red'>用户分组</h1>")
+	})
+
+	user.GET("/:id", func(c *gee.Context) {
+		c.JSON(200, gee.H{
+			"id":   c.Param("id"),
+			"user": "user",
+		})
+	})
+```
 
 
 

@@ -5,31 +5,36 @@ import (
 )
 
 func main() {
-	engin := gee.New()
-	engin.GET("/", func(c *gee.Context) {
+	r := gee.New()
+	r.GET("/", func(c *gee.Context) {
 		c.HTML(200, "<h1>你好这里是首页</h1>")
 	})
-	engin.GET("/home", func(c *gee.Context) {
+	r.GET("/home", func(c *gee.Context) {
 		c.JSON(200, gee.H{
 			"data": "这里是home",
 			"code": 200,
 		})
 	})
-	engin.GET("/user/:id", func(c *gee.Context) {
+	user := r.Group("/user")
+	user.GET("/", func(c *gee.Context) {
+		c.HTML(200, "<h1 style='color: red'>用户分组</h1>")
+	})
+
+	user.GET("/:id", func(c *gee.Context) {
 		c.JSON(200, gee.H{
 			"id":   c.Param("id"),
 			"user": "user",
 		})
 	})
-	engin.GET("/user/:id/:name", func(c *gee.Context) {
+	user.GET("/:id/:name", func(c *gee.Context) {
 		c.JSON(200, gee.H{
 			"params": c.Params,
 		})
 	})
-	engin.GET("/static/*filename", func(c *gee.Context) {
+	r.GET("/static/*filename", func(c *gee.Context) {
 		c.JSON(200, gee.H{
 			"params": c.Params,
 		})
 	})
-	engin.Run(":9999")
+	r.Run(":9999")
 }

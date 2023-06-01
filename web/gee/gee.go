@@ -6,26 +6,16 @@ type handleFunc func(c *Context)
 
 type Engine struct {
 	router *Router
+	groups []*RouterGroup // 保存所有的RouterGroup
+
+	*RouterGroup // 继承routerGroup让engine作为最上层的router
 }
 
 func New() *Engine {
-	return &Engine{router: newRouter()}
-}
-
-func (e *Engine) addRouter(method string, pattern string, handle handleFunc) {
-	e.router.addRouter(method, pattern, handle)
-}
-func (e *Engine) GET(pattern string, handle handleFunc) {
-	e.addRouter("GET", pattern, handle)
-}
-func (e *Engine) POST(pattern string, handle handleFunc) {
-	e.addRouter("POST", pattern, handle)
-}
-func (e *Engine) PUT(pattern string, handle handleFunc) {
-	e.addRouter("PUT", pattern, handle)
-}
-func (e *Engine) DELETE(pattern string, handle handleFunc) {
-	e.addRouter("DELETE", pattern, handle)
+	engine := &Engine{router: newRouter()}
+	engine.RouterGroup = &RouterGroup{engine: engine}
+	engine.groups = append(engine.groups, engine.RouterGroup)
+	return engine
 }
 
 func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
