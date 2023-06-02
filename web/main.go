@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	r := gee.New()
+	r := gee.Default()
 	r.GET("/", func(c *gee.Context) {
 		c.HTML(200, "<h1>你好这里是首页</h1>")
 	})
@@ -23,6 +23,7 @@ func main() {
 		}
 	}
 	user := r.Group("/user")
+	user.Static("/static", "./img")
 	user.Use(userMiddleware())
 	user.GET("/", func(c *gee.Context) {
 		c.HTML(200, "<h1 style='color: red'>用户分组</h1>")
@@ -34,15 +35,6 @@ func main() {
 			"user": "user",
 		})
 	})
-	user.GET("/:id/:name", func(c *gee.Context) {
-		c.JSON(200, gee.H{
-			"params": c.Params,
-		})
-	})
-	r.GET("/static/*filename", func(c *gee.Context) {
-		c.JSON(200, gee.H{
-			"params": c.Params,
-		})
-	})
+
 	r.Run(":9999")
 }

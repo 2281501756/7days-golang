@@ -593,8 +593,32 @@ func (r *Router) handle(c *Context) {
 ```
 修改router中的handle方法，将这里的直接执行换成添加到中间件之中，这个也是最后一个中间件
 
+## day6
+实现静态服务器，go中的net/http包中以及实现了这个服务器的功能我们只需要在使用并解析路由即可
 
-
-
+```go
+func (r *RouterGroup) Static(relativePath string, root string) {
+	handle := r.createStaticHandle(relativePath, http.Dir(root))
+	urlPath := path.Join(relativePath, "/*filepath")
+	r.GET(urlPath, handle)
+}
+func (r *RouterGroup) createStaticHandle(pattern string, handle http.FileSystem) HandleFunc {
+	// 获取路由的前缀
+	absolutePath := path.Join(r.prefix, pattern)
+	//根据root路径创建服务器
+	serveFileHandle := http.StripPrefix(absolutePath, http.FileServer(handle))
+	return func(c *Context) {
+		// 获取传入参数中文件的路径
+		file := c.Param("filepath")
+		// 查看文件是否能打开，如果不能则返回404
+		if _, err := handle.Open(file); err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		// 有文件传入context
+		serveFileHandle.ServeHTTP(c.Writer, c.Req)
+	}
+}
+```
 
 
