@@ -23,7 +23,7 @@ func New() *Engine {
 
 func Default() *Engine {
 	engine := New()
-	//engine.Use(recover())
+	engine.Use(Recovery())
 	return engine
 }
 

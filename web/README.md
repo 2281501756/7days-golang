@@ -620,5 +620,33 @@ func (r *RouterGroup) createStaticHandle(pattern string, handle http.FileSystem)
 	}
 }
 ```
+# day7
+错误恢复，由于handle是交给用户去编写有可能出错因此需要异常处理
 
+go中的panic会直接终端程序，但是也会执行defer中的方法，我们可以在defer中使用recover用来接收错误，至此思路就很明朗了
+编写一个recover中间件里面编写defer方法拦截报错即可
+```go
+func Recovery() HandleFunc {
+	return func(c *Context) {
+		defer func() {
+			if err := recover(); err != nil {
+				fmt.Println(err)
+				c.Fail(http.StatusInternalServerError, "Internal Server Error")
+			}
+		}()
+		c.Next()
+	}
+}
+
+```
+
+至此gee框架基本完成，实现功能
+
+* http服务器搭建
+* 上下文
+* 前缀树路由
+* 分组控制
+* 中间件
+* 静态文件服务器
+* 错误恢复
 

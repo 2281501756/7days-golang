@@ -3,12 +3,17 @@ package main
 import (
 	"fmt"
 	"github.com/2281501756/7days-golang/web/gee"
+	"net/http"
 )
 
 func main() {
 	r := gee.Default()
 	r.GET("/", func(c *gee.Context) {
 		c.HTML(200, "<h1>你好这里是首页</h1>")
+	})
+	r.GET("/error", func(c *gee.Context) {
+		names := []string{"geektutu"}
+		c.String(http.StatusOK, names[100])
 	})
 	r.GET("/home", func(c *gee.Context) {
 		c.JSON(200, gee.H{
@@ -28,13 +33,11 @@ func main() {
 	user.GET("/", func(c *gee.Context) {
 		c.HTML(200, "<h1 style='color: red'>用户分组</h1>")
 	})
-
 	user.GET("/:id", func(c *gee.Context) {
 		c.JSON(200, gee.H{
 			"id":   c.Param("id"),
 			"user": "user",
 		})
 	})
-
 	r.Run(":9999")
 }

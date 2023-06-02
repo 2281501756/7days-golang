@@ -2,6 +2,7 @@ package gee
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 )
 
@@ -58,6 +59,15 @@ func (c *Context) SetHeader(key, value string) {
 func (c *Context) Status(code int) {
 	c.StatusCode = code
 	c.Writer.WriteHeader(code)
+}
+func (c *Context) Fail(code int, message string) {
+	c.String(code, message)
+}
+
+func (c *Context) String(code int, format string, values ...interface{}) {
+	c.SetHeader("Content-Type", "text/plain")
+	c.Status(code)
+	c.Writer.Write([]byte(fmt.Sprintf(format, values...)))
 }
 
 func (c *Context) JSON(code int, obj interface{}) {
