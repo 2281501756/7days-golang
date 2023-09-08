@@ -106,6 +106,7 @@ func (s *Server) sendResponse(cc codec.Codec, h *codec.Header, body interface{},
 	if err := cc.Write(h, body); err != nil {
 		log.Println("rpc server: write response failed", err)
 	}
+	log.Println("server send", body)
 }
 func (s *Server) HandleResponse(cc codec.Codec, req *request, lock *sync.Mutex, group *sync.WaitGroup) {
 	defer group.Done()
