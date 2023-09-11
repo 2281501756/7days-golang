@@ -5,23 +5,10 @@ import (
 	"geerpc"
 	"log"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 )
-
-func startServer(addr chan string) {
-	var foo Foo
-	if err := geerpc.Register(&foo); err != nil {
-		log.Fatal("register error:", err)
-	}
-	l, err := net.Listen("tcp", ":0")
-	if err != nil {
-		log.Fatal("network error:", err)
-	}
-	log.Println("start rpc server on", l.Addr())
-	addr <- l.Addr().String()
-	geerpc.Accept(l)
-}
 
 type Foo int
 
@@ -32,18 +19,36 @@ func (f Foo) Sum(args Args, reply *int) error {
 	return nil
 }
 
-func main() {
-	addr := make(chan string)
-	go startServer(addr)
+type Game struct{}
 
-	// in fact, following code is like a simple geerpc client
+func (g Game) Login(args Args, reply *int) error {
+	return nil
+}
+func (g Game) Logout(args Args, reply *int) error {
+	return nil
 
-	client, _ := geerpc.Dial("tcp", <-addr, &geerpc.DefaultOption)
+}
+func (g Game) AddActive(args Args, reply *float64) error {
+	return nil
+}
+
+func startServer(addrCh chan string) {
+	var foo Foo
+	var game Game
+	l, _ := net.Listen("tcp", ":9999")
+	_ = geerpc.Register(&foo)
+	_ = geerpc.Register(&game)
+	geerpc.HandleHTTP()
+	addrCh <- l.Addr().String()
+	_ = http.Serve(l, nil)
+}
+
+func call(addrCh chan string) {
+	client, _ := geerpc.DialHTTP("tcp", <-addrCh, &geerpc.DefaultOption)
 	defer func() { _ = client.Close() }()
 
-	// send options
-	time.Sleep(time.Second * 1)
-
+	time.Sleep(time.Second)
+	// send request & receive response
 	var wg sync.WaitGroup
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
@@ -58,4 +63,11 @@ func main() {
 		}(i)
 	}
 	wg.Wait()
+}
+
+func main() {
+	log.SetFlags(0)
+	ch := make(chan string)
+	go call(ch)
+	startServer(ch)
 }
