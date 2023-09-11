@@ -3,6 +3,7 @@ package geerpc
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"geerpc/codec"
 	"io"
 	"log"
@@ -10,18 +11,21 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 )
 
 const MagicNumber = 0x1337babe
 
 type Option struct {
-	MagicNumber int
-	CodecType   codec.Type
+	MagicNumber    int
+	CodecType      codec.Type
+	ConnectTimeout time.Duration
 }
 
 var DefaultOption = Option{
-	MagicNumber: MagicNumber,
-	CodecType:   codec.GobType,
+	MagicNumber:    MagicNumber,
+	CodecType:      codec.GobType,
+	ConnectTimeout: time.Second * 10,
 }
 
 type Server struct {
@@ -90,7 +94,7 @@ func (s *Server) serverCodec(cc codec.Codec) {
 			continue
 		}
 		group.Add(1)
-		go s.HandleResponse(cc, req, sending, group)
+		go s.HandleResponse(cc, req, sending, group, DefaultOption.ConnectTimeout)
 	}
 	group.Wait()
 	_ = cc.Close()
@@ -138,15 +142,34 @@ func (s *Server) sendResponse(cc codec.Codec, h *codec.Header, body interface{},
 	}
 	log.Println("server send", body)
 }
-func (s *Server) HandleResponse(cc codec.Codec, req *request, lock *sync.Mutex, group *sync.WaitGroup) {
+func (s *Server) HandleResponse(cc codec.Codec, req *request, lock *sync.Mutex, group *sync.WaitGroup, timeout time.Duration) {
 	defer group.Done()
-	err := req.svc.call(req.mtype, req.argv, req.replyv)
-	if err != nil {
-		req.h.Error = err.Error()
-		s.sendResponse(cc, req.h, invalidRequest, lock)
+	called := make(chan struct{})
+	sent := make(chan struct{})
+	go func() {
+		err := req.svc.call(req.mtype, req.argv, req.replyv)
+		called <- struct{}{}
+		if err != nil {
+			req.h.Error = err.Error()
+			s.sendResponse(cc, req.h, invalidRequest, lock)
+			sent <- struct{}{}
+			return
+		}
+		s.sendResponse(cc, req.h, req.replyv.Interface(), lock)
+		sent <- struct{}{}
+	}()
+	if timeout == 0 {
+		<-called
+		<-sent
 		return
 	}
-	s.sendResponse(cc, req.h, req.replyv.Interface(), lock)
+	select {
+	case <-time.After(timeout):
+		req.h.Error = fmt.Sprintf("rpc server: request handle timeout: expect within %s", timeout)
+		s.sendResponse(cc, req.h, invalidRequest, lock)
+	case <-called:
+		<-sent
+	}
 }
 
 func (s *Server) Accept(lis net.Listener) {

@@ -1,6 +1,7 @@
 package geerpc
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
 )
 
 type Call struct {
@@ -152,9 +154,15 @@ func (c *Client) Go(serviceMethod string, args, reply interface{}, done chan *Ca
 	return call
 }
 
-func (c *Client) Call(serviceMethod string, args, reply interface{}) error {
-	call := <-c.Go(serviceMethod, args, reply, make(chan *Call, 1)).Done
-	return call.Error
+func (c *Client) Call(context context.Context, serviceMethod string, args, reply interface{}) error {
+	call := c.Go(serviceMethod, args, reply, make(chan *Call, 1))
+	select {
+	case <-context.Done():
+		c.removeCall(call.Seq)
+		return context.Err()
+	case <-call.Done:
+		return call.Error
+	}
 }
 
 func NewClient(conn net.Conn, opt *Option) (*Client, error) {
@@ -184,8 +192,18 @@ func newClientCodec(c codec.Codec, ops *Option) *Client {
 	return client
 }
 
+type clientResult struct {
+	client *Client
+	err    error
+}
+type newClientFunc func(conn net.Conn, opt *Option) (client *Client, err error)
+
 func Dial(network, address string, option *Option) (*Client, error) {
-	conn, err := net.Dial(network, address)
+	return dialTimeout(NewClient, network, address, option)
+}
+
+func dialTimeout(f newClientFunc, network, address string, option *Option) (*Client, error) {
+	conn, err := net.DialTimeout(network, address, option.ConnectTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -194,5 +212,16 @@ func Dial(network, address string, option *Option) (*Client, error) {
 			_ = conn.Close()
 		}
 	}()
-	return NewClient(conn, option)
+	ch := make(chan clientResult)
+	go func() {
+		client, err := f(conn, option)
+		ch <- clientResult{client, err}
+	}()
+
+	select {
+	case <-time.After(option.ConnectTimeout):
+		return nil, fmt.Errorf("rpc client: connect timeout: expect within %s", option.ConnectTimeout)
+	case result := <-ch:
+		return result.client, result.err
+	}
 }
