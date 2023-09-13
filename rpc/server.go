@@ -99,6 +99,7 @@ func (s *Server) serverCodec(cc codec.Codec) {
 	}
 	group.Wait()
 	_ = cc.Close()
+	fmt.Println("后端服务器关闭")
 }
 
 func (s *Server) readRequestHeader(cc codec.Codec) (*codec.Header, error) {
